@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>howLLMworks:)</title>
+<style>
+/* one file, no libraries, works offline */
+:root{--ink:#1f2430;--soft:#6b7280;--rule:#e5e7eb;--chip:#f3f4f6;--a:#2563eb;--b:#ea7c1e}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#fff;color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body::before{content:"";position:fixed;inset:-40px;z-index:-2;pointer-events:none;
+ background:radial-gradient(600px 420px at 8% 4%,rgba(37,99,235,.08),transparent 70%),radial-gradient(520px 420px at 94% 32%,rgba(234,124,30,.08),transparent 70%),radial-gradient(640px 460px at 28% 100%,rgba(37,99,235,.06),transparent 70%);
+ animation:drift 30s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(28px,18px,0) scale(1.05)}}
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+main{max-width:860px;margin:0 auto;padding:52px 24px 70px}
+.kicker{font-size:13px;color:var(--a);font-weight:600}
+h1{font-size:clamp(30px,6vw,44px);line-height:1.15;margin:6px 0 12px;font-weight:700;letter-spacing:-.015em}
+.hl{color:#fff;background:var(--b);border-radius:9px;padding:0 10px;margin:0 2px;display:inline-block}
+.smile{color:var(--b);margin-left:4px;display:inline-block;transition:transform .3s}
+h1:hover .smile{transform:rotate(90deg) scale(1.15)}
+.intro{color:var(--soft);max-width:600px;margin:0}
+b{font-weight:600}
+.intro b,.cap b{color:var(--ink);background:linear-gradient(transparent 58%,rgba(234,124,30,.25) 58%);padding:0 2px}
+
+/* the pipeline strip */
+.flow{display:flex;align-items:center;margin:26px 0 0;overflow-x:auto;padding:6px 2px 10px}
+.node{display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;color:var(--ink);font-size:12px;transition:transform .25s}
+.node:hover{transform:translateY(-3px)}
+.node i{font-style:normal;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font:600 15px ui-monospace,Menlo,monospace;color:var(--a);background:#eef3ff;border:1px solid #d3e0ff}
+.node:nth-of-type(even) i{color:#c2610f;background:#fff1e4;border-color:#fbd9b8}
+.flow u{flex:1;min-width:22px;height:2px;background:var(--rule);position:relative;margin:0 4px 18px}
+.flow u::after{content:"";position:absolute;top:-2px;left:0;width:6px;height:6px;border-radius:50%;background:var(--b);animation:run 2.6s linear infinite}
+.flow u:nth-of-type(2)::after{animation-delay:.5s}.flow u:nth-of-type(3)::after{animation-delay:1s}.flow u:nth-of-type(4)::after{animation-delay:1.5s}.flow u:nth-of-type(5)::after{animation-delay:2s}
+@keyframes run{from{left:0;opacity:0}15%{opacity:1}85%{opacity:1}to{left:calc(100% - 6px);opacity:0}}
+
+section{background:rgba(255,255,255,.62);border:1px solid var(--rule);border-radius:18px;padding:24px;margin-top:26px;animation:up .6s both}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+h2{font-size:21px;margin:0 0 6px;font-weight:600;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h2 i{font-style:normal;width:30px;height:30px;border-radius:50%;background:var(--a);color:#fff;display:grid;place-items:center;font-size:13px}
+h2 small{font-size:13px;color:var(--soft);font-weight:400}
+.cap{color:var(--soft);font-size:15px;margin:0 0 14px;max-width:680px}
+textarea,input[type=text]{width:100%;font:15px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:#fff;border:1px solid var(--rule);border-radius:10px;padding:11px 14px;outline:0;transition:border-color .25s,box-shadow .25s}
+textarea:focus{border-color:var(--a);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+textarea{min-height:76px;resize:vertical}
+button{font:500 14px system-ui,sans-serif;color:#fff;background:var(--a);border:0;border-radius:9px;padding:9px 16px;margin:10px 8px 0 0;cursor:pointer;transition:opacity .2s,transform .2s}
+button:hover{opacity:.88;transform:translateY(-1px)}
+button.plain{background:none;color:var(--soft);border:1px solid var(--rule)}
+.label{font-size:12px;color:var(--soft);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin:20px 0 2px;display:flex;align-items:center;gap:7px}
+.label::before{content:"";width:14px;height:3px;border-radius:2px;background:var(--b)}
+.small{font-size:14px;color:var(--soft);margin:0}
+.tally{font-size:14px;color:var(--soft);margin-top:14px}
+.tally b{background:#eef3ff;color:var(--a);border-radius:6px;padding:1px 8px;margin-right:3px}
+.tally b:nth-child(even){background:#fff1e4;color:#c2610f}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;min-height:8px}
+.chip{background:#eef3ff;color:#1d4ed8;border-radius:6px;padding:2px 10px;font:14px ui-monospace,Menlo,Consolas,monospace;animation:pop .3s both;animation-delay:calc(var(--i,0)*14ms)}
+.chip small{opacity:.6;font-size:11px;margin-left:6px}
+.chip.mrg{background:#d6e4ff;color:#1e40af;font-weight:600}
+.chip.unk{background:#fff1e4;border:1px dashed var(--b);color:#c2610f}
+.chip.sp{background:#f1f1f4;color:var(--soft)}
+.chip em{font-style:normal;opacity:.55;margin:0 5px}
+.chip.mg b{color:var(--a)}
+@keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.br{flex-basis:100%;height:0}
+.key{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 4px}.key .chip{animation:none}
+
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin:0 0 12px}
+.seg button{margin:0;border-radius:0;background:#fff;color:var(--soft);padding:7px 14px}
+.seg button.on{background:var(--a);color:#fff}
+.tvs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.tv{display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:10px;padding:5px 10px;background:#fff;font-size:13px;animation:pop .3s both}
+.tv b{font-family:ui-monospace,Menlo,monospace;min-width:34px}
+.tv em{font-style:normal;color:var(--soft)}
+.vec{display:inline-flex;gap:2px}
+.vec i{width:9px;height:18px;border-radius:2px;display:block}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:18px;padding:0 24px}
+@media(max-width:720px){.pair{grid-template-columns:1fr;gap:28px;padding:0 4px}}
+.pair h3{font-size:14px;margin:0 0 2px;font-weight:600}
+.pair h3 span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}
+canvas.sc{width:100%;height:320px;display:block;margin-top:8px;border:1px solid var(--rule);border-radius:12px;cursor:grab;touch-action:none;background:rgba(255,255,255,.7)}
+.heat{overflow-x:auto;margin-top:8px}
+table{border-collapse:separate;border-spacing:2px;font:13px ui-monospace,Menlo,monospace}
+th{color:var(--soft);font-weight:500;padding:5px 10px;text-align:right}
+thead th{text-align:center}
+td{padding:5px 10px;text-align:center;border-radius:4px;transition:background .4s}
+td.mk{background:repeating-linear-gradient(45deg,#f4f4f6,#f4f4f6 3px,#fff 3px,#fff 6px);color:#c4c4cc}
+
+.ctrl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:14px}
+input[type=range]{width:200px;accent-color:var(--a)}
+.bar{display:grid;grid-template-columns:90px 1fr 54px;gap:12px;align-items:center;margin:8px 0;font:14px ui-monospace,Menlo,monospace}
+.track{height:14px;background:var(--chip);border-radius:7px;overflow:hidden}
+.fill{height:100%;width:0;background:var(--a);border-radius:7px;transition:width .55s cubic-bezier(.2,.8,.2,1),background .3s}
+.bar:first-child .fill{background:var(--b)}
+.bar em{font-style:normal;color:var(--soft);text-align:right}
+
+footer{margin-top:44px;text-align:center;color:var(--soft);font-size:14px}
+.made{margin-top:14px;font-size:15px;color:var(--ink)}
+.made b{color:var(--a)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<main>
+
+<div class="kicker">an interactive explainer</div>
+<h1>how<span class="hl">LLM</span>works<span class="smile">:)</span></h1>
+<p class="intro">Type a sentence and follow it through a large language model: <b>tokens</b>, <b>numbers</b>, <b>vectors</b>, <b>attention</b>, and finally a <b>next-word guess</b>.</p>
+
+<div class="flow">
+  <a class="node" href="#s1"><i>Aa</i>text</a><u></u>
+  <a class="node" href="#s2"><i>[ ]</i>tokens</a><u></u>
+  <a class="node" href="#s2"><i>#</i>IDs</a><u></u>
+  <a class="node" href="#s3"><i>◉</i>vectors</a><u></u>
+  <a class="node" href="#s3"><i>⇆</i>attention</a><u></u>
+  <a class="node" href="#s4"><i>→</i>next word</a>
+</div>
+
+<section id="s1">
+  <h2><i>1</i>Vocabulary <small>Aa → the model’s dictionary</small></h2>
+  <p class="cap">Feed it text. Words get an ID, and the most common letter pairs <b>fuse</b> into single pieces (BPE), the same trick GPT-style tokenizers use.</p>
+  <textarea id="vin" placeholder="One sentence per line, e.g.&#10;the bird was singing happily in the garden&#10;the cat sat on the mat"></textarea>
+  <button id="add">Add to vocabulary</button><button class="plain" id="clr">Start over</button>
+  <div class="tally" id="tally"></div>
+  <div class="label">Words</div><div class="chips" id="vlist"></div>
+  <div class="label">Merge rules, most common first</div><div class="chips" id="mlist"></div>
+</section>
+
+<section id="s2">
+  <h2><i>2</i>Tokenizer <small>[ ] and # → what the model really reads</small></h2>
+  <p class="cap">Unknown words don’t break it: they are cut into <b>smaller known pieces</b>. Every piece becomes an ID, wrapped in start and end markers.</p>
+  <div class="key"><span class="chip">known word</span><span class="chip mrg">merged piece</span><span class="chip unk">unknown</span><span class="chip sp">special</span></div>
+  <textarea id="tin" rows="3" placeholder="type any sentence, press Enter for a new line">the cat was unhappily walking
+he was walking home</textarea>
+  <div class="label">Words</div><div class="chips" id="wt"></div>
+  <div class="label">Pieces</div><div class="chips" id="st"></div>
+  <div class="label">IDs, the real model input</div><div class="chips" id="ids"></div>
+</section>
+
+<section id="s3">
+  <h2><i>3</i>Vectors &amp; attention <small>◉ and ⇆ → meaning as geometry</small></h2>
+  <p class="cap">Each token becomes a <b>vector</b> (boxes below), gets a <b>position</b> added, then <b>self-attention</b> lets tokens look at each other. Close dots mean similar.</p>
+  <div class="seg"><button id="m1" class="on">GPT-style · looks back only</button><button id="m2">BERT-style · looks both ways</button></div>
+  <textarea id="ein" rows="3" placeholder="type sentences, press Enter for a new line">the cat chased the dog
+the dog chased the cat</textarea>
+  <div class="label">Token vector + position</div>
+  <p class="small">Each box is one number: blue positive, orange negative. Real models use thousands.</p>
+  <div class="tvs" id="tvs"></div>
+  <div class="pair">
+    <div><h3><span style="background:var(--a)"></span>spelling-based</h3><p class="small">built from letters</p><canvas class="sc" id="c1"></canvas></div>
+    <div><h3><span style="background:var(--b)"></span>context-based</h3><p class="small">built from neighbours + attention</p><canvas class="sc" id="c2"></canvas></div>
+  </div>
+  <p class="small" style="margin-top:10px">Drag to rotate, scroll to zoom, hover a dot. Dots take their sentence’s colour; the big ringed dot is the whole sentence.</p>
+  <div class="label">Sentence vs sentence</div>
+  <p class="small" id="modeNote"></p>
+  <div class="chips" id="legend"></div>
+  <div class="pair" id="sim"></div>
+  <div class="label">Attention: row looks at column</div>
+  <p class="small">Darker orange = more attention. Hatched = hidden (the future in GPT-style, or another sentence).</p>
+  <div class="heat" id="heat"></div>
+</section>
+
+<section id="s4">
+  <h2><i>4</i>Next word <small>→ what an LLM actually does</small></h2>
+  <p class="cap">A model never reads the whole answer at once. It scores every word, picks <b>one next token</b>, adds it, and repeats.</p>
+  <textarea id="pin" rows="2">the cat sat on the</textarea>
+  <div class="ctrl"><span>temperature <b id="tval">0.8</b></span><input type="range" id="temp" min="0.2" max="2" step="0.1" value="0.8"><span class="small">focused ← → creative</span></div>
+  <button id="best">Pick most likely</button><button class="plain" id="samp">Sample a word</button>
+  <div class="label">Top guesses</div>
+  <div id="bars"></div>
+</section>
+
+<footer>
+  <p>A toy model: vectors come from your text, not from a trained neural network. The steps are the real ones.</p>
+  <div class="made">Made by <b>Manav Swarnkar</b></div>
+</footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let corpus = [], vocab = {}, merges = [], tokId = {};
+const SPECIAL = {'[UNK]':0, '<s>':1, '</s>':2};
+const SAVE_KEY = 'reads-text-corpus';
+const words = s => s.toLowerCase().match(/[a-z0-9']+/g) || [];
+const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
+
+/* ---------- 1. vocabulary + BPE ---------- */
+function mergeSeq(s, a, b){
+  const out = [];
+  for (let i = 0; i < s.length; i++){
+    if (s[i] === a && s[i+1] === b){ out.push(a + b); i++; } else out.push(s[i]);
+  }
+  return out;
+}
+function train(){
+  const seqs = Object.entries(vocab).map(([w, c]) => [w.split(''), c]);
+  merges = [];
+  for (let n = 0; n < 80; n++){
+    const pairs = {};
+    seqs.forEach(([s, c]) => { for (let j = 0; j < s.length - 1; j++){ const k = s[j] + '\t' + s[j+1]; pairs[k] = (pairs[k] || 0) + c; } });
+    let best = null, top = 1;
+    for (const k in pairs) if (pairs[k] > top){ top = pairs[k]; best = k; }
+    if (!best) break;
+    const [a, b] = best.split('\t');
+    merges.push([a, b]);
+    seqs.forEach(x => x[0] = mergeSeq(x[0], a, b));
+  }
+  const chars = [...new Set(Object.keys(vocab).join('').split(''))].sort();
+  tokId = {...SPECIAL};
+  [...chars, ...merges.map(([a, b]) => a + b)].forEach(t => { if (!(t in tokId)) tokId[t] = Object.keys(tokId).length; });
+}
+function bpe(w){ let s = w.split(''); merges.forEach(([a, b]) => s = mergeSeq(s, a, b)); return s; }
+
+const chip = (text, cls, small, i) =>
+  `<span class="chip ${cls || ''}" style="--i:${i || 0}">${text}${small !== undefined ? `<small>${small}</small>` : ''}</span>`;
+const empty = '<span class="small">nothing yet</span>';
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(corpus)); } catch(e){} }
+
+function showVocab(){
+  const ws = Object.keys(vocab);
+  $('tally').innerHTML = `<b>${ws.length}</b> words · <b>${Object.keys(tokId).length}</b> pieces · <b>${merges.length}</b> merges · <b>${corpus.length}</b> sentences`;
+  $('vlist').innerHTML = ws.map((w, i) => chip(w, '', i + 1, i)).join('') || empty;
+  $('mlist').innerHTML = merges.map(([a, b], i) =>
+    `<span class="chip mg" style="--i:${i}">${a}<em>+</em>${b}<em>→</em><b>${a + b}</b></span>`).join('') || empty;
+}
+function addText(t, quiet){
+  t.split(/\n+/).map(x => x.trim()).filter(Boolean).forEach(line => {
+    corpus.push(line); words(line).forEach(w => vocab[w] = (vocab[w] || 0) + 1);
+  });
+  train(); showVocab(); showTokens(); showEmbeddings(); showPredict();
+  if (!quiet) save();
+}
+$('add').onclick = () => { addText($('vin').value); $('vin').value = ''; };
+$('clr').onclick = () => { corpus = []; vocab = {}; merges = []; tokId = {...SPECIAL}; save(); showVocab(); showTokens(); showEmbeddings(); showPredict(); };
+
+/* ---------- 2. tokenizer ---------- */
+function showTokens(){
+  const lines = $('tin').value.split('\n').map(words).filter(l => l.length), known = Object.keys(vocab);
+  const BR = '<span class="br"></span>';
+  let n = 0; const nx = () => n++ % 30;
+  const W = [], P = [], D = [];
+  lines.forEach(line => {
+    const wr = [], pr = [chip('&lt;s&gt;', 'sp', 1, nx())], dr = [chip(1, 'sp', undefined, nx())];
+    line.forEach(word => {
+      wr.push(known.includes(word) ? chip(word, '', known.indexOf(word) + 1, nx()) : chip(word, 'unk', '[UNK]', nx()));
+      bpe(word).forEach((piece, i) => {
+        const id = piece in tokId ? tokId[piece] : 0;
+        pr.push(chip((i ? '##' : '') + piece, id === 0 ? 'unk' : (piece.length > 1 ? 'mrg' : ''), id, nx()));
+        dr.push(chip(id, '', undefined, nx()));
+      });
+    });
+    pr.push(chip('&lt;/s&gt;', 'sp', 2, nx())); dr.push(chip(2, 'sp', undefined, nx()));
+    W.push(wr.join('')); P.push(pr.join('')); D.push(dr.join(''));
+  });
+  $('wt').innerHTML = W.join(BR) || empty;
+  $('st').innerHTML = P.join(BR) || empty;
+  $('ids').innerHTML = D.join(BR) || empty;
+}
+$('tin').oninput = showTokens;
+
+/* ---------- 3. vectors, position, attention ---------- */
+const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+function spellVec(w){
+  const v = Array(96).fill(0), t = '<' + w + '>';
+  for (let n = 2; n <= 4; n++) for (let i = 0; i + n <= t.length; i++){ const h = hash(t.slice(i, i + n)); v[h % 96] += (h >>> 9 & 1) ? 1 : -1; }
+  return v;
+}
+function pca(X){
+  const n = X.length, d = X[0].length, mean = Array(d).fill(0);
+  X.forEach(r => r.forEach((x, j) => mean[j] += x / n));
+  let R = X.map(r => r.map((x, j) => x - mean[j]));
+  const out = X.map(() => [0, 0, 0]);
+  for (let k = 0; k < 3; k++){
+    let v = Array.from({length:d}, (_, j) => Math.sin(j * 12.9898 + k * 78.233) + .5);
+    for (let it = 0; it < 50; it++){
+      const p = R.map(r => dot(r, v)), nv = Array(d).fill(0);
+      R.forEach((r, i) => r.forEach((x, j) => nv[j] += x * p[i]));
+      const len = Math.hypot(...nv) || 1; v = nv.map(x => x / len);
+    }
+    const p = R.map(r => dot(r, v)); p.forEach((x, i) => out[i][k] = x);
+    R = R.map((r, i) => r.map((x, j) => x - p[i] * v[j]));
+  }
+  const big = [0, 1, 2].map(k => Math.max(1e-9, ...out.map(r => Math.abs(r[k]))));
+  return out.map(r => r.map((x, k) => x / big[k]));
+}
+/* neighbour counts -> add sinusoidal position -> one self-attention layer (causal or not) */
+function contextVecs(lines, causal){
+  const toks = lines.flat(), line = lines.flatMap((l, i) => l.map(() => i)), pos = lines.flatMap(l => l.map((_, j) => j));
+  const docs = [...corpus.map(words), ...lines];
+  const F = [...new Set(docs.flat())], fi = {}, M = {}, d = F.length;
+  F.forEach((w, i) => fi[w] = i);
+  toks.forEach(t => M[t] = M[t] || Array(d).fill(0));
+  docs.forEach(dc => dc.forEach((w, i) => {
+    if (!M[w]) return;
+    for (let j = Math.max(0, i - 2); j <= Math.min(dc.length - 1, i + 2); j++) if (j !== i) M[w][fi[dc[j]]] += 1 / Math.abs(i - j);
+  }));
+  const PE = p => Array.from({length:d}, (_, k) => (k % 2 ? Math.cos : Math.sin)(p / Math.pow(10000, (k - k % 2) / d)) * .25);
+  const X = toks.map((t, i) => { const len = Math.hypot(...M[t]) || 1, pe = PE(pos[i]); return M[t].map((x, k) => x / len + pe[k]); });
+  const A = X.map((xi, i) => {
+    const s = X.map((xj, j) => (line[i] !== line[j] || (causal && j > i)) ? -Infinity : (i === j ? 2 : dot(xi, xj) * 4 - Math.abs(i - j) * .2));
+    const top = Math.max(...s), e = s.map(v => Math.exp(v - top)), z = e.reduce((a, b) => a + b);
+    return e.map(v => v / z);
+  });
+  const H = X.map((xi, i) => xi.map((v, k) => v + A[i].reduce((s, a, j) => s + a * X[j][k], 0)));
+  return {A, H};
+}
+
+function Scene(canvas, colorVar){
+  const g = canvas.getContext('2d');
+  let pts = [], ax = -.35, ay = .6, zoom = 1, dragging = false, lx, ly, mx = -1, my = -1;
+  const resize = () => { const r = canvas.getBoundingClientRect(), d = devicePixelRatio || 1; canvas.width = Math.round(r.width * d); canvas.height = Math.round(r.height * d); g.setTransform(d, 0, 0, d, 0, 0); };
+  function project([x, y, z]){
+    const cy = Math.cos(ay), sy = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
+    const X = x * cy + z * sy; let Z = -x * sy + z * cy; const Y = y * cx - Z * sx; Z = y * sx + Z * cx;
+    const W = canvas.clientWidth, H = canvas.clientHeight, s = Math.min(W, H) * .29 * zoom, f = 1 / (1 - Z * .22);
+    return {x: W/2 + X * s * f, y: H/2 - Y * s * f, z: Z, f};
+  }
+  function frame(){
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (canvas.width !== Math.round(W * (devicePixelRatio || 1))) resize();
+    g.clearRect(0, 0, W, H);
+    const cs = getComputedStyle(document.documentElement);
+    const col = cs.getPropertyValue(colorVar) || '#2563eb';
+    g.font = '11px system-ui,sans-serif'; g.lineWidth = 1;
+    [[1,0,0,'PC1'],[0,1,0,'PC2'],[0,0,1,'PC3']].forEach(([a, b, c, name]) => {
+      const p = project([-a*1.1, -b*1.1, -c*1.1]), q = project([a*1.1, b*1.1, c*1.1]);
+      g.strokeStyle = '#e5e7eb'; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke();
+      g.fillStyle = '#6b7280'; g.fillText(name, q.x + 4, q.y - 4);
+    });
+    pts.forEach(p => { for (let k = 0; k < 3; k++) p.cur[k] += (p.to[k] - p.cur[k]) * .1; });
+    const pr = pts.map((p, i) => ({...project(p.cur), label: p.label, i, color: p.color, big: p.big}));
+    let hover = -1, near = 18;
+    if (mx >= 0) pr.forEach(q => { const d = Math.hypot(q.x - mx, q.y - my); if (d < near){ near = d; hover = q.i; } });
+    pr.sort((a, b) => a.z - b.z).forEach(q => {
+      const h = q.i === hover, c = q.color || col;
+      g.globalAlpha = h ? 1 : Math.min(1, Math.max(.35, .45 + .55 * (q.z + 1) / 2));
+      g.fillStyle = c; g.beginPath(); g.arc(q.x, q.y, ((q.big ? 8 : 5.5) + (h ? 2.5 : 0)) * q.f, 0, 7); g.fill();
+      if (q.big){ g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(q.x, q.y, 14 * q.f, 0, 7); g.stroke(); g.lineWidth = 1; }
+      g.fillStyle = '#1f2430'; g.font = `${h || q.big ? 'bold ' : ''}${(q.big ? 15 : 13) * q.f}px system-ui,sans-serif`;
+      g.fillText(q.label, q.x + 11, q.y + 4); g.globalAlpha = 1;
+    });
+    if (!pts.length){ g.fillStyle = '#6b7280'; g.font = '14px system-ui,sans-serif'; g.fillText('type a sentence below', W/2 - 70, H/2); }
+    if (!dragging && hover < 0) ay += .003;
+    requestAnimationFrame(frame);
+  }
+  canvas.onpointerdown = e => { dragging = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; };
+  canvas.onpointermove = e => { const r = canvas.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; if (!dragging) return; ay += (e.clientX - lx) * .01; ax += (e.clientY - ly) * .01; lx = e.clientX; ly = e.clientY; };
+  canvas.onpointerup = () => { dragging = false; canvas.style.cursor = 'grab'; };
+  canvas.onpointerleave = () => mx = -1;
+  canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.min(3, Math.max(.4, zoom * (e.deltaY < 0 ? 1.1 : .9))); }, {passive:false});
+  frame();
+  return { set(next){ const old = Object.fromEntries(pts.map(p => [p.key, p])); pts = next.map(n => ({...n, cur: old[n.key] ? old[n.key].cur : [0, 0, 0]})); } };
+}
+const sceneA = Scene($('c1'), '--a'), sceneB = Scene($('c2'), '--b');
+
+const cells = (vals, grey) => vals.map(v => {
+  const a = .15 + Math.min(1, Math.abs(v)) * .85;
+  return `<i style="background:${grey ? `rgba(107,114,128,${a})` : v >= 0 ? `rgba(37,99,235,${a})` : `rgba(234,124,30,${a})`}"></i>`;
+}).join('');
+const posVals = p => Array.from({length:8}, (_, k) => k % 2 ? Math.cos(p / Math.pow(2, (k - 1) / 2 + 1)) : Math.sin(p / Math.pow(2, k / 2 + 1)));
+
+let causal = true;
+$('m1').onclick = () => { causal = true; $('m1').className = 'on'; $('m2').className = ''; showEmbeddings(); };
+$('m2').onclick = () => { causal = false; $('m2').className = 'on'; $('m1').className = ''; showEmbeddings(); };
+
+function showEmbeddings(){
+  const lines = $('ein').value.split('\n').map(words).filter(l => l.length);
+  const toks = lines.flat(), seen = {}, total = {};
+  toks.forEach(w => total[w] = (total[w] || 0) + 1);
+  const labels = toks.map(w => { seen[w] = (seen[w] || 0) + 1; return total[w] > 1 ? `${w}·${seen[w]}` : w; });
+  if (!toks.length){ sceneA.set([]); sceneB.set([]); ['heat','sim','legend','tvs'].forEach(i => $(i).innerHTML = ''); return; }
+
+  const PAL = ['#2563eb', '#ea7c1e', '#16a34a', '#9333ea', '#db2777', '#0891b2'];
+  const lineOf = lines.flatMap((l, i) => l.map(() => i)), posOf = lines.flatMap(l => l.map((_, j) => j));
+  const mean = rows => rows[0].map((_, k) => rows.reduce((s, r) => s + r[k], 0) / rows.length);
+  const cos = (a, b) => dot(a, b) / ((Math.hypot(...a) * Math.hypot(...b)) || 1);
+  const spellRaw = toks.map(spellVec);
+  const {A, H} = contextVecs(lines, causal);
+  const idxOf = i => toks.map((_, t) => t).filter(t => lineOf[t] === i);
+  const sentSpell = lines.map((l, i) => mean(idxOf(i).map(t => spellRaw[t])));
+  // GPT reads a sentence through its last token; BERT-style averages all tokens
+  const sentCtx = lines.map((l, i) => { const ix = idxOf(i); return causal ? H[ix[ix.length - 1]] : mean(ix.map(t => H[t])); });
+  const spell = pca([...spellRaw, ...sentSpell]), ctx = pca([...H, ...sentCtx]), N = toks.length;
+
+  $('tvs').innerHTML = toks.slice(0, 14).map((w, i) => {
+    const v = spellRaw[i], m = Math.max(...v.map(Math.abs)) || 1;
+    return `<div class="tv" style="animation-delay:${i * 20}ms"><b>${w}</b><span class="vec">${cells([0,12,24,36,48,60,72,84].map(k => v[k] / m))}</span><em>+</em><span class="vec">${cells(posVals(posOf[i]), true)}</span></div>`;
+  }).join('');
+
+  const build = pos => [
+    ...toks.map((w, i) => ({key: labels[i], label: labels[i], to: pos[i], color: PAL[lineOf[i] % PAL.length]})),
+    ...lines.map((l, i) => ({key: 'sentence-' + i, label: 'S' + (i + 1), to: pos[N + i], color: PAL[i % PAL.length], big: true}))
+  ];
+  sceneA.set(build(spell)); sceneB.set(build(ctx));
+
+  $('modeNote').innerHTML = causal
+    ? 'GPT-style: a sentence is represented by its <b>last token</b>, which has looked back at everything before it, so word order matters.'
+    : 'BERT-style: every token sees both sides; a sentence is the <b>average</b> of its tokens.';
+  $('legend').innerHTML = lines.map((l, i) => `<span class="chip" style="background:color-mix(in srgb,${PAL[i % PAL.length]} 14%,#fff);color:${PAL[i % PAL.length]}">S${i + 1} · ${l.join(' ')}</span>`).join('');
+
+  const table = (vecs, cv, title) => `<div><h3>${title}</h3><div class="heat"><table><thead><tr><th></th>${vecs.map((_, i) => `<th>S${i + 1}</th>`).join('')}</tr></thead>` +
+    vecs.map((v, i) => `<tr><th>S${i + 1}</th>` + vecs.map(u => { const c = cos(v, u); return `<td style="background:color-mix(in srgb,var(${cv}) ${Math.round(Math.max(0, c) * 70)}%,transparent)">${(c * 100).toFixed(1)}%</td>`; }).join('') + '</tr>').join('') + '</table></div></div>';
+  $('sim').innerHTML = lines.length > 1 ? table(sentSpell, '--a', 'spelling-based') + table(sentCtx, '--b', 'context-based') : '<p class="small">Add a second line above to compare two sentences.</p>';
+
+  $('heat').innerHTML = '<table><thead><tr><th></th>' + labels.map(l => `<th>${l}</th>`).join('') + '</tr></thead>' +
+    A.map((row, i) => `<tr><th>${labels[i]}</th>` + row.map(w => w === 0 ? '<td class="mk">·</td>' :
+      `<td style="background:color-mix(in srgb,var(--b) ${Math.round(w * 70)}%,transparent)">${Math.round(w * 100)}%</td>`).join('') + '</tr>').join('') + '</table>';
+}
+$('ein').oninput = showEmbeddings;
+
+/* ---------- 4. next-word prediction ---------- */
+const bars = [];
+for (let i = 0; i < 6; i++){
+  const d = document.createElement('div'); d.className = 'bar';
+  d.innerHTML = '<span>–</span><div class="track"><div class="fill"></div></div><em></em>';
+  $('bars').appendChild(d); bars.push(d);
+}
+function distribution(ctxWords, T){
+  const V = Object.keys(vocab); if (!V.length) return [];
+  const uni = {}, bi = {}, tri = {};
+  corpus.map(words).forEach(ws => ws.forEach((w, i) => {
+    uni[w] = (uni[w] || 0) + 1;
+    if (i > 0){ const a = ws[i-1]; (bi[a] = bi[a] || {})[w] = (bi[a][w] || 0) + 1; }
+    if (i > 1){ const k = ws[i-2] + ' ' + ws[i-1]; (tri[k] = tri[k] || {})[w] = (tri[k][w] || 0) + 1; }
+  }));
+  const a = ctxWords[ctxWords.length - 1], b = ctxWords[ctxWords.length - 2];
+  const logits = V.map(w => Math.log(((tri[b + ' ' + a] || {})[w] || 0) + .5 * ((bi[a] || {})[w] || 0) + .03 * (uni[w] || 0) + .001) / T);
+  const top = Math.max(...logits), e = logits.map(l => Math.exp(l - top)), z = e.reduce((s, x) => s + x, 0);
+  return V.map((w, i) => ({w, p: e[i] / z})).sort((x, y) => y.p - x.p);
+}
+function showPredict(){
+  const T = +$('temp').value; $('tval').textContent = T.toFixed(1);
+  const last = $('pin').value.split('\n').map(words).filter(l => l.length).pop() || [];
+  const dist = last.length ? distribution(last, T) : [];
+  bars.forEach((el, i) => {
+    const d = dist[i];
+    el.children[0].textContent = d ? d.w : '–';
+    el.children[1].firstChild.style.width = d ? (d.p * 100).toFixed(1) + '%' : '0%';
+    el.children[2].textContent = d ? Math.round(d.p * 100) + '%' : '';
+  });
+  return dist;
+}
+const append = w => { $('pin').value = $('pin').value.replace(/\s*$/, '') + ' ' + w; showPredict(); };
+$('pin').oninput = showPredict; $('temp').oninput = showPredict;
+$('best').onclick = () => { const d = showPredict(); if (d.length) append(d[0].w); };
+$('samp').onclick = () => {
+  const d = showPredict(); if (!d.length) return;
+  let r = Math.random(); for (const x of d){ r -= x.p; if (r <= 0){ append(x.w); return; } } append(d[0].w);
+};
+
+/* ---------- background: drifting tokens and links ---------- */
+(function(){
+  const c = $('bg'), g = c.getContext('2d'), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bits = ['the','##ing','17','0.42','<s>','attn','→','0.91','Σ','softmax','1011','q·k','[UNK]','</s>','0.07'];
+  let W, H, P = [], mouse = {x: -999, y: -999};
+  const pick = () => { const v = Object.keys(vocab); return Math.random() < .5 && v.length ? v[Math.random() * v.length | 0] : bits[Math.random() * bits.length | 0]; };
+  const spawn = (p, anywhere) => { p.x = Math.random() * W; p.y = anywhere ? Math.random() * H : H + 20; p.vx = (Math.random() - .5) * .3; p.vy = -.12 - Math.random() * .3; p.t = Math.random() < .4 ? pick() : null; p.c = Math.random() < .5 ? '37,99,235' : '234,124,30'; p.r = 1.2 + Math.random() * 1.6; return p; };
+  function size(){ const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight; c.width = W * d; c.height = H * d; g.setTransform(d, 0, 0, d, 0, 0); P = Array.from({length: Math.round(Math.min(70, W * H / 24000))}, () => spawn({}, true)); }
+  function tick(){
+    g.clearRect(0, 0, W, H);
+    P.forEach(p => {
+      const dx = p.x - mouse.x, dy = p.y - mouse.y, d = Math.hypot(dx, dy);
+      if (d < 130){ p.vx += dx / d * .02; p.vy += dy / d * .02; }
+      p.vx *= .995; p.x += p.vx; p.y += p.vy;
+      if (p.y < -20 || p.x < -30 || p.x > W + 30) spawn(p, false);
+    });
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++){
+      const a = P[i], b = P[j]; if (a.t || b.t) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 120){ g.strokeStyle = `rgba(37,99,235,${(1 - d / 120) * .12})`; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+    }
+    P.forEach(p => {
+      if (p.t){ g.fillStyle = `rgba(${p.c},.26)`; g.font = '11px ui-monospace,Menlo,monospace'; g.fillText(p.t, p.x, p.y); }
+      else { g.fillStyle = `rgba(${p.c},.3)`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 7); g.fill(); }
+    });
+    if (!calm) requestAnimationFrame(tick);
+  }
+  addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  addEventListener('resize', size);
+  size(); tick();
+})();
+
+/* ---------- start-up ---------- */
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch(e){}
+addText((saved && saved.length ? saved : [
+  'the cat sat on the mat', 'the dog sat on the log', 'the cat chased the dog', 'the dog chased the cat',
+  'she was happily walking and talking', 'the king and the queen walked home', 'he was unhappy and she was happy',
+  'the cat sat on the mat and the dog sat on the log'
+]).join('\n'), true);
+</script>
+</body>
+</html>
